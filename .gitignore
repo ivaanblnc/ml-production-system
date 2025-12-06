@@ -1,0 +1,70 @@
+cat > .gitignore << 'EOF'
+# macOS metadata files
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# macOS Thumbnails
+Thumbs.db
+
+# macOS Finder info
+.Spotlight-V100
+.Trashes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# DVC
+.dvc/
+*.dvc
+
+# Docker
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Secrets
+*.env
+.env.local
+*.pem
+*.key
+
+# Model artifacts (optional - puedes quererlos en Git LFS)
+# ml-training/models/*.pkl
+
+# Data (NO SUBIR DATOS)
+data-pipeline/data/
+ml-training/data/raw/
+ml-training/data/processed/
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+
+# Kubernetes secrets
+kubernetes/secret.yaml
+EOF
