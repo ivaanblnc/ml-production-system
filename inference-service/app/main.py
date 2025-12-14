@@ -1,16 +1,16 @@
-import os
 import time
 from typing import Literal
 from pathlib import Path
+
 import joblib
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
 
-
 # Model path (from inference-service/)
 MODEL_PATH = "/app/ml-training/models/xgboost_fraud_model.pkl"
+
 
 class PredictionRequest(BaseModel):
     transaction_count_1m: int = Field(ge=0)
@@ -26,6 +26,13 @@ class PredictionResponse(BaseModel):
     model_version: str
 
 
+class MonitoringResponse(BaseModel):
+    model_version: str
+    last_latency_ms: float
+    data_drift_score: float
+    total_requests: int
+
+
 app = FastAPI(title="Fraud Detection API", version="1.0.0")
 
 # Prometheus instrumentation (/metrics)
@@ -35,8 +42,7 @@ Instrumentator().instrument(app).expose(app)
 model = joblib.load(MODEL_PATH)
 MODEL_VERSION = "v1"
 
-
-# Métricas of domain
+# Domain metrics
 PREDICTIONS_TOTAL = Counter(
     "predictions_total",
     "Total predictions made",
@@ -60,7 +66,11 @@ DATA_DRIFT_SCORE = Gauge(
     "data_drift_score",
     "Data drift score (0-1)",
 )
-DATA_DRIFT_SCORE.set(0.0)  
+DATA_DRIFT_SCORE.set(0.0)
+
+# Simple in-memory monitoring state
+LAST_PREDICTION_LATENCY_MS = 0.0
+TOTAL_REQUESTS = 0
 
 
 @app.get("/health")
@@ -68,8 +78,21 @@ def health():
     return {"status": "ok", "model_version": MODEL_VERSION}
 
 
+@app.get("/monitoring", response_model=MonitoringResponse)
+def monitoring():
+    # DATA_DRIFT_SCORE._value.get() is the current gauge value
+    return MonitoringResponse(
+        model_version=MODEL_VERSION,
+        last_latency_ms=LAST_PREDICTION_LATENCY_MS,
+        data_drift_score=DATA_DRIFT_SCORE._value.get(),
+        total_requests=TOTAL_REQUESTS,
+    )
+
+
 @app.post("/predict", response_model=PredictionResponse)
 def predict(req: PredictionRequest):
+    global LAST_PREDICTION_LATENCY_MS, TOTAL_REQUESTS
+
     start = time.perf_counter()
 
     X = [[
@@ -85,12 +108,16 @@ def predict(req: PredictionRequest):
     latency_sec = time.perf_counter() - start
     latency_ms = latency_sec * 1000.0
 
-    # Metrcis of domain
+    # Domain metrics
     PREDICTIONS_TOTAL.labels(
         model_version=MODEL_VERSION,
         result=str(pred),
     ).inc()
     PREDICTION_LATENCY_SECONDS.observe(latency_sec)
+
+    # In-memory monitoring state
+    LAST_PREDICTION_LATENCY_MS = latency_ms
+    TOTAL_REQUESTS += 1
 
     return PredictionResponse(
         is_fraud=pred,
