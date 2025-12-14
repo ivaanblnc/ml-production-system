@@ -1,12 +1,16 @@
 import time
 from typing import Literal
-from pathlib import Path
+from contextlib import asynccontextmanager
 
 import joblib
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, Gauge
 from prometheus_fastapi_instrumentator import Instrumentator
+
+from .db import SessionLocal, PredictionLog
+from ..monitoring.monitoring import start_drift_monitor, DATA_DRIFT_SCORE
+
 
 # Model path (from inference-service/)
 MODEL_PATH = "/app/ml-training/models/xgboost_fraud_model.pkl"
@@ -33,7 +37,20 @@ class MonitoringResponse(BaseModel):
     total_requests: int
 
 
-app = FastAPI(title="Fraud Detection API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    start_drift_monitor(interval_seconds=60)
+    yield
+
+app = FastAPI(
+    title="Fraud Detection API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+
 
 # Prometheus instrumentation (/metrics)
 Instrumentator().instrument(app).expose(app)
@@ -62,13 +79,7 @@ MODEL_VERSION_INFO = Gauge(
 )
 MODEL_VERSION_INFO.labels(model_version=MODEL_VERSION).set(1.0)
 
-DATA_DRIFT_SCORE = Gauge(
-    "data_drift_score",
-    "Data drift score (0-1)",
-)
-DATA_DRIFT_SCORE.set(0.0)
 
-# Simple in-memory monitoring state
 LAST_PREDICTION_LATENCY_MS = 0.0
 TOTAL_REQUESTS = 0
 
@@ -80,7 +91,6 @@ def health():
 
 @app.get("/monitoring", response_model=MonitoringResponse)
 def monitoring():
-    # DATA_DRIFT_SCORE._value.get() is the current gauge value
     return MonitoringResponse(
         model_version=MODEL_VERSION,
         last_latency_ms=LAST_PREDICTION_LATENCY_MS,
@@ -118,6 +128,21 @@ def predict(req: PredictionRequest):
     # In-memory monitoring state
     LAST_PREDICTION_LATENCY_MS = latency_ms
     TOTAL_REQUESTS += 1
+
+    db = SessionLocal()
+    try:
+        log = PredictionLog(
+            transaction_count_1m=req.transaction_count_1m,
+            avg_amount_1m=req.avg_amount_1m,
+            max_amount_1m=req.max_amount_1m,
+            fraud_count_1m=req.fraud_count_1m,
+            is_fraud=bool(pred),
+            fraud_probability=proba,
+        )
+        db.add(log)
+        db.commit()
+    finally:
+        db.close()
 
     return PredictionResponse(
         is_fraud=pred,

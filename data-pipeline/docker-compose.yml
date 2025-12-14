@@ -33,5 +33,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  inference-service:
+    build:
+      context: ..          
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+
 volumes:
   postgres_data:

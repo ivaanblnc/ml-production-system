@@ -65,14 +65,6 @@ def main():
 
     features_df = build_features(parsed_df)
 
-    # Si quieres seguir viendo por consola, descomenta este bloque:
-    # console_query = (
-    #     features_df.writeStream
-    #     .outputMode("append")
-    #     .format("console")
-    #     .option("truncate", "false")
-    #     .start()
-    # )
 
     query = (
         features_df.writeStream
