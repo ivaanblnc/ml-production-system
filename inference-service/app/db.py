@@ -1,5 +1,4 @@
-# inference-service/db.py
-
+import os
 from datetime import datetime
 
 from sqlalchemy import (
@@ -14,7 +13,10 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 
 # Postgres Settings (docker-compose)
-DATABASE_URL = "postgresql://mluser:mlpass@postgres:5432/ml_data"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://mluser:mlpass@host.docker.internal:5432/ml_data",
+)
 
 # Create engine and Session
 engine = create_engine(DATABASE_URL)

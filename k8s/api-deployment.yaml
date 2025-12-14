@@ -48,5 +48,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 3
           env:
+            - name: DATABASE_URL
+              value: "postgresql://mluser:mlpass@host.docker.internal:5432/ml_data"
             - name: MODEL_VERSION
               value: "v1"
