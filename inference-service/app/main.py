@@ -1,7 +1,7 @@
 import os
 import time
 from typing import Literal
-
+from pathlib import Path
 import joblib
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
@@ -10,11 +10,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 
 # Model path (from inference-service/)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_PATH = os.path.join(
-    BASE_DIR, "..", "ml-training", "models", "xgboost_fraud_model.pkl"
-)
-
+MODEL_PATH = "/app/ml-training/models/xgboost_fraud_model.pkl"
 
 class PredictionRequest(BaseModel):
     transaction_count_1m: int = Field(ge=0)
